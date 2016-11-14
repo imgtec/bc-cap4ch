@@ -35,6 +35,8 @@
 
 /* USER CODE BEGIN Includes */
 
+#include <stdio.h>
+
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -47,6 +49,11 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
+	short unsigned int cap[1024];
+	unsigned int last = 0;
+	int ch;
+
+	volatile int irqcount;
 
 /* USER CODE END PV */
 
@@ -66,12 +73,23 @@ static void MX_USART2_UART_Init(void);
 
 /* USER CODE BEGIN 0 */
 
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+	last %= 1024;
+	irqcount++;
+	cap[last] = htim->Instance->CCR1;
+	last++;
+}
+
+
+
 /* USER CODE END 0 */
 
 int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+	unsigned int i;
 
   /* USER CODE END 1 */
 
@@ -91,17 +109,43 @@ int main(void)
   MX_USART2_UART_Init();
 
   /* USER CODE BEGIN 2 */
+	printf("The Open Bicycle Computer\n");
+	printf("Hello World.\n");
+	printf("Capture Test.\n");
+
+	
+	HAL_TIM_IC_Start_IT (&htim2,  TIM_CHANNEL_1);	
+	htim2.Instance->ARR = 0xFFFF;
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	i = 0;
   while (1)
   {
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
+	  int irqcnt;
+	  
+	  irqcnt = irqcount;
+	  /* interrupt here? */
+	  irqcount -= irqcnt;
+  	while(irqcnt) {
+		char buf[128];
+		unsigned int tmp;
+		
+		i %= 1024;
+		tmp = cap[i];
 
+		sprintf(buf, "%3d(%3d):[%08x]\n", irqcnt, i, tmp);
+		printf("%s", buf);
+		
+		i++;
+		irqcnt--;
+
+  	}
   }
   /* USER CODE END 3 */
 
@@ -201,9 +245,9 @@ static void MX_TIM2_Init(void)
   TIM_IC_InitTypeDef sConfigIC;
 
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
+  htim2.Init.Prescaler = 0xFFFF;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 0;
+  htim2.Init.Period = 0xFFFF;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
@@ -231,7 +275,7 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 1;
+  sConfigIC.ICFilter = 0;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
